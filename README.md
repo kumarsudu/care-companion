@@ -134,7 +134,13 @@ graph TD
 
 ## Assets
 
-- [Architecture Diagram](assets/architecture_diagram.png)
-- [Cover Banner](assets/cover_page_banner.png)
+![Architecture Diagram](assets/architecture_diagram.png)
+![Cover Page Banner](assets/cover_page_banner.png)
+
+## Demo Script
+
+The spoken narration walkthrough script is available at [DEMO_SCRIPT.txt](DEMO_SCRIPT.txt).
+
+
 
 
