@@ -12,11 +12,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# CareCompanion MCP Server — Health Data Tools
+#
+# This server implements the Model Context Protocol (MCP) over stdio transport.
+# It is launched as a subprocess by McpToolset in agent.py and exposes three
+# domain-specific tools to sub-agents:
+#
+#   search_clinical_trials  — find trials by condition and location
+#   get_trial_eligibility   — retrieve eligibility criteria for a specific trial
+#   get_medication_info     — return dosage, precautions, and interactions for a drug
+#
+# Design: Using stdio (not HTTP) means no separate port is needed. The ADK
+# runtime spawns and tears down this process per session, keeping the
+# deployment footprint minimal.
+#
+# Data: The databases below use mock data to demonstrate the tool contracts.
+# In production these would be replaced with calls to ClinicalTrials.gov REST
+# API and a validated drug reference (e.g., OpenFDA or RxNorm).
+
 from mcp.server.fastmcp import FastMCP
 
+# FastMCP handles stdio transport, tool registration, and JSON-RPC serialization.
 mcp = FastMCP("care-companion-mcp")
 
-# Mock data for clinical trials
+
+# -----------------------------------------------------------------------------
+# Mock Data: Clinical Trials
+# -----------------------------------------------------------------------------
+
+# Each record mirrors the key fields returned by the ClinicalTrials.gov API v2:
+# NCT ID, phase, recruiting status, location, eligibility text, and description.
+# Three geographically distinct trials are included to demonstrate location filtering.
 CLINICAL_TRIALS_DB = [
     {
         "nct_id": "NCT05938472",
@@ -50,13 +76,22 @@ CLINICAL_TRIALS_DB = [
     }
 ]
 
-# Mock data for medications
+
+# -----------------------------------------------------------------------------
+# Mock Data: Medications
+# -----------------------------------------------------------------------------
+
+# Keyed by lowercase generic name for case-insensitive lookup.
+# Fields match standard drug reference formats: class, dosage, precautions,
+# contraindications, and drug interactions.
 MEDICATIONS_DB = {
     "metformin": {
         "drug_name": "Metformin",
         "class": "Biguanide Antidiabetic",
         "standard_dosage": "500mg, 850mg, or 1000mg tablets, usually taken with meals once or twice daily.",
         "precautions": "Take with meals to reduce gastrointestinal side effects. Monitor kidney function regularly.",
+        # Severe renal impairment is a hard contraindication — Metformin accumulates
+        # and can cause lactic acidosis if eGFR falls below 30 mL/min.
         "contraindications": "Severe renal impairment (eGFR < 30 mL/min), acute or chronic metabolic acidosis.",
         "interactions": "Contrast dyes (hold Metformin before/after imaging studies), cimetidine, dolutegravir."
     },
@@ -72,22 +107,34 @@ MEDICATIONS_DB = {
         "drug_name": "Atorvastatin",
         "class": "HMG-CoA Reductase Inhibitor (Statin)",
         "standard_dosage": "10mg to 80mg once daily, at any time of day.",
+        # Grapefruit juice inhibits CYP3A4, increasing atorvastatin plasma levels
+        # and raising the risk of myopathy at standard doses.
         "precautions": "Avoid large quantities of grapefruit juice. Monitor liver enzymes and report unexplained muscle pain immediately.",
         "contraindications": "Active liver disease, pregnancy, breastfeeding.",
         "interactions": "Clarithromycin, itraconazole, cyclosporine (increase risk of muscle toxicity/myopathy)."
     }
 }
 
+
+# -----------------------------------------------------------------------------
+# MCP Tools
+# -----------------------------------------------------------------------------
+
 @mcp.tool()
 def search_clinical_trials(condition: str, location: str = None) -> list:
     """Search for clinical trials matching a medical condition and optional location.
+
+    Matching behavior:
+      - condition: case-insensitive substring match (e.g., "diabetes" matches "Type 1 Diabetes")
+      - location: case-insensitive substring match against city/state (e.g., "Boston" matches "Boston, MA")
+      - If location is omitted, all trials matching the condition are returned.
 
     Args:
         condition: The medical condition (e.g., 'Diabetes', 'Hypertension', 'Lung Cancer').
         location: Optional city or state to filter trials (e.g., 'Boston, MA', 'San Francisco, CA').
 
     Returns:
-        A list of matching trial dicts with details.
+        A list of matching trial dicts with details. Empty list if no match found.
     """
     results = []
     condition_lower = condition.lower()
@@ -100,15 +147,19 @@ def search_clinical_trials(condition: str, location: str = None) -> list:
                 results.append(trial)
     return results
 
+
 @mcp.tool()
 def get_trial_eligibility(nct_id: str) -> dict:
     """Retrieve detailed eligibility criteria and info for a trial by NCT ID.
+
+    NCT ID lookup is case-insensitive (e.g., "nct05938472" == "NCT05938472").
 
     Args:
         nct_id: The unique National Clinical Trial (NCT) ID (e.g., 'NCT05938472').
 
     Returns:
-        A dictionary containing eligibility criteria and details.
+        A dictionary with eligibility criteria, recruiting status, and description.
+        Returns an error dict if the NCT ID is not found in the database.
     """
     for trial in CLINICAL_TRIALS_DB:
         if trial["nct_id"].upper() == nct_id.upper():
@@ -121,20 +172,30 @@ def get_trial_eligibility(nct_id: str) -> dict:
             }
     return {"error": f"Clinical trial with ID {nct_id} not found."}
 
+
 @mcp.tool()
 def get_medication_info(drug_name: str) -> dict:
     """Retrieve details, dosages, interactions, and precautions for a drug.
+
+    Lookup strips whitespace and normalizes to lowercase for fuzzy matching
+    against the MEDICATIONS_DB keys.
 
     Args:
         drug_name: The generic drug name (e.g., 'Metformin', 'Lisinopril', 'Atorvastatin').
 
     Returns:
-        A dictionary containing drug information and guidelines.
+        A dictionary with drug class, standard dosage, precautions, contraindications,
+        and known drug interactions.
+        Returns an error dict if the drug name is not found in the database.
     """
     name_lower = drug_name.lower().strip()
     if name_lower in MEDICATIONS_DB:
         return MEDICATIONS_DB[name_lower]
     return {"error": f"Medication information for '{drug_name}' is not in the database. Please verify spelling."}
 
+
+# Entry point: mcp.run() starts the stdio event loop.
+# When launched by McpToolset via StdioServerParameters, this process reads
+# JSON-RPC requests from stdin and writes responses to stdout.
 if __name__ == "__main__":
     mcp.run()

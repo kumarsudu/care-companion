@@ -12,9 +12,9 @@ Before starting, ensure you have:
 
 ## Quick Start
 
-1. Clone this repository (replace with your repo URL):
+1. Clone this repository:
    ```bash
-   git clone <repo-url>
+   git clone https://github.com/kumarsudu/care-companion.git
    cd care-companion
    ```
 
