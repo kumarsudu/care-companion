@@ -1,4 +1,4 @@
-# Care Companion — Personal Health Concierge
+# Care Companion - Personal Health Concierge
 
 A secure, graph-based personal health assistant that tracks symptoms, schedules medication updates, and searches for clinical trials using the Agent Development Kit (ADK) and Model Context Protocol (MCP).
 
