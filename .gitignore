@@ -206,6 +206,7 @@ tools/a2a-inspector/
 # Secrets & Local State
 *.env
 .env.*
+!.env.example
 artifacts/
 .ruff_cache/
 *.db
