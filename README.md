@@ -132,6 +132,10 @@ graph TD
 
 ⚠️ NEVER push `.env` to GitHub. Your API key will be exposed publicly.
 
+## Demo Video
+
+▶️ [Watch on YouTube](https://www.youtube.com/watch?v=OLSXMEdcTmw) — 4 min 57 sec walkthrough covering architecture, live demo, and security features.
+
 ## Assets
 
 ![Architecture Diagram](assets/architecture_diagram.png)
